@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Faith Service | Панель платежника</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .header {
+            background: #2A7F64;
+            color: white;
+            padding: 20px;
+            border-radius: 16px;
+            margin-bottom: 20px;
+        }
+        .order-card {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .order-card.pending {
+            border-left: 4px solid #ff9800;
+        }
+        .order-card.paid {
+            border-left: 4px solid #4caf50;
+        }
+        .order-card.completed {
+            border-left: 4px solid #2196f3;
+            opacity: 0.7;
+        }
+        .order-number {
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+        .order-details {
+            color: #666;
+            margin-bottom: 12px;
+        }
+        .order-amount {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #2A7F64;
+            margin-bottom: 12px;
+        }
+        .btn {
+            background: #2A7F64;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 40px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        .btn:active { transform: scale(0.98); }
+        .btn.disabled { background: #ccc; cursor: not-allowed; }
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            margin-bottom: 8px;
+        }
+        .status-pending { background: #fff3e0; color: #ff9800; }
+        .status-paid { background: #e8f5e9; color: #4caf50; }
+        .status-completed { background: #e3f2fd; color: #2196f3; }
+        .refresh-btn {
+            background: #eee;
+            color: #333;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1> Панель платежника</h1>
+            <p>Подтверждение оплат eSIM</p>
+        </div>
+        <button class="btn refresh-btn" id="refreshBtn">🔄 Обновить</button>
+        <div id="ordersList"></div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://domtiusbwjbxbfkygwvx.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRvbXRpdXNid2pieGJma3lnd3Z4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5NTAxMjgsImV4cCI6MjA5MDUyNjEyOH0.GlYbpkx1tWUqJ2kwrOHFH5f7EaklBcuXHz8W0U-YGWg';
+        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        async function loadOrders() {
+            const { data, error } = await supabase
+                .from('orders')
+                .select('*')
+                .order('created_at', { ascending: false });
+            
+            if (error) {
+                console.error(error);
+                return;
+            }
+            
+            const container = document.getElementById('ordersList');
+            container.innerHTML = data.map(order => `
+                <div class="order-card ${order.status}">
+                    <div class="status-badge status-${order.status}">
+                        ${order.status === 'pending' ? '⏳ Ожидает оплаты' : order.status === 'paid' ? '✅ Оплачен' : '🎉 Завершен'}
+                    </div>
+                    <div class="order-number">${order.order_number}</div>
+                    <div class="order-details">
+                        ${order.tariff_name} | ${order.email}<br>
+                        Создан: ${new Date(order.created_at).toLocaleString()}
+                    </div>
+                    <div class="order-amount">${order.total_amount} ₽</div>
+                    ${order.status === 'pending' ? `
+                        <button class="btn" onclick="confirmPayment('${order.id}')">✅ Подтвердить оплату</button>
+                    ` : order.status === 'paid' ? `
+                        <span style="color:#4caf50;">✓ Оплата подтверждена, ожидает оформления eSIM</span>
+                    ` : `
+                        <span style="color:#2196f3;">✓ eSIM оформлен</span>
+                    `}
+                </div>
+            `).join('');
+        }
+
+        async function confirmPayment(orderId) {
+            const { error } = await supabase
+                .from('orders')
+                .update({ status: 'paid' })
+                .eq('id', orderId);
+            
+            if (error) {
+                alert('Ошибка подтверждения');
+            } else {
+                alert('Оплата подтверждена! Регистратор может оформлять eSIM.');
+                loadOrders();
+            }
+        }
+
+        document.getElementById('refreshBtn').onclick = loadOrders;
+        loadOrders();
+        
+        // Автообновление каждые 5 секунд
+        setInterval(loadOrders, 5000);
+    </script>
+</body>
+</html>

@@ -27,31 +27,56 @@
             border-radius: 16px;
             margin-bottom: 20px;
         }
+        .stats {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: white;
+            padding: 12px 20px;
+            border-radius: 12px;
+            flex: 1;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .stat-number {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: #2A7F64;
+        }
+        .stat-label {
+            font-size: 0.7rem;
+            color: #8AB9B4;
+        }
         .order-card {
             background: white;
             border-radius: 16px;
             padding: 20px;
             margin-bottom: 16px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: all 0.2s;
         }
         .order-card.pending {
             border-left: 4px solid #ff9800;
+            background: #fffef7;
         }
         .order-card.paid {
             border-left: 4px solid #4caf50;
-        }
-        .order-card.completed {
-            border-left: 4px solid #2196f3;
-            opacity: 0.7;
+            opacity: 0.8;
         }
         .order-number {
             font-size: 1.2rem;
             font-weight: bold;
             margin-bottom: 8px;
+            font-family: monospace;
+            color: #1C4E3F;
         }
         .order-details {
             color: #666;
             margin-bottom: 12px;
+            font-size: 0.85rem;
+            line-height: 1.5;
         }
         .order-amount {
             font-size: 1.5rem;
@@ -63,98 +88,283 @@
             background: #2A7F64;
             color: white;
             border: none;
-            padding: 10px 20px;
+            padding: 10px 24px;
             border-radius: 40px;
             cursor: pointer;
             font-size: 0.9rem;
+            font-weight: 500;
+            transition: transform 0.1s;
         }
-        .btn:active { transform: scale(0.98); }
-        .btn.disabled { background: #ccc; cursor: not-allowed; }
+        .btn:active { transform: scale(0.97); }
+        .btn-warning {
+            background: #ff9800;
+        }
         .status-badge {
             display: inline-block;
             padding: 4px 12px;
             border-radius: 20px;
-            font-size: 0.75rem;
+            font-size: 0.7rem;
+            font-weight: 600;
             margin-bottom: 8px;
         }
         .status-pending { background: #fff3e0; color: #ff9800; }
         .status-paid { background: #e8f5e9; color: #4caf50; }
-        .status-completed { background: #e3f2fd; color: #2196f3; }
         .refresh-btn {
             background: #eee;
             color: #333;
             margin-bottom: 20px;
+            width: 100%;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #8AB9B4;
+            background: white;
+            border-radius: 16px;
+        }
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+        .tab {
+            background: white;
+            border: 1px solid #ddd;
+            padding: 8px 20px;
+            border-radius: 40px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+        .tab.active {
+            background: #2A7F64;
+            color: white;
+            border-color: #2A7F64;
+        }
+        .time-info {
+            font-size: 0.7rem;
+            color: #aaa;
+            margin-top: 8px;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        .pulse {
+            animation: pulse 1.5s ease-in-out infinite;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1> Панель платежника</h1>
+            <h1>💳 Панель платежника</h1>
             <p>Подтверждение оплат eSIM</p>
         </div>
+        
+        <div class="stats" id="stats">
+            <div class="stat-card">
+                <div class="stat-number" id="pendingCount">0</div>
+                <div class="stat-label">Ожидают оплаты</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="paidCount">0</div>
+                <div class="stat-label">Подтверждены</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="totalCount">0</div>
+                <div class="stat-label">Всего заказов</div>
+            </div>
+        </div>
+        
+        <div class="tabs">
+            <button class="tab active" data-filter="pending">⏳ Ожидают оплаты</button>
+            <button class="tab" data-filter="paid">✅ Оплачены (ждут eSIM)</button>
+            <button class="tab" data-filter="all">📋 Все заказы</button>
+        </div>
+        
         <button class="btn refresh-btn" id="refreshBtn">🔄 Обновить</button>
         <div id="ordersList"></div>
     </div>
 
     <script>
+        // Ваши данные Supabase
         const SUPABASE_URL = 'https://domtiusbwjbxbfkygwvx.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRvbXRpdXNid2pieGJma3lnd3Z4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5NTAxMjgsImV4cCI6MjA5MDUyNjEyOH0.GlYbpkx1tWUqJ2kwrOHFH5f7EaklBcuXHz8W0U-YGWg';
+        
         const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
+        
+        let currentFilter = 'pending';
+        let allOrders = [];
+        
+        // Функция для форматирования даты
+        function formatDate(dateStr) {
+            const date = new Date(dateStr);
+            return date.toLocaleString('ru-RU', {
+                day: '2-digit',
+                month: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+        
+        // Загрузка заказов
         async function loadOrders() {
-            const { data, error } = await supabase
-                .from('orders')
-                .select('*')
-                .order('created_at', { ascending: false });
+            try {
+                const { data, error } = await supabase
+                    .from('orders')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+                
+                if (error) {
+                    console.error('Ошибка загрузки:', error);
+                    showError();
+                    return;
+                }
+                
+                allOrders = data || [];
+                updateStats();
+                renderOrders();
+            } catch (err) {
+                console.error('Ошибка:', err);
+                showError();
+            }
+        }
+        
+        // Обновление статистики
+        function updateStats() {
+            const pending = allOrders.filter(o => o.status === 'pending').length;
+            const paid = allOrders.filter(o => o.status === 'paid').length;
+            document.getElementById('pendingCount').textContent = pending;
+            document.getElementById('paidCount').textContent = paid;
+            document.getElementById('totalCount').textContent = allOrders.length;
+        }
+        
+        // Подтверждение оплаты
+        async function confirmPayment(orderId) {
+            if (!confirm('Подтвердить оплату заказа?')) return;
             
-            if (error) {
-                console.error(error);
+            try {
+                const { error } = await supabase
+                    .from('orders')
+                    .update({ 
+                        status: 'paid',
+                        updated_at: new Date()
+                    })
+                    .eq('id', orderId);
+                
+                if (error) {
+                    alert('Ошибка подтверждения: ' + error.message);
+                    return;
+                }
+                
+                alert('✅ Оплата подтверждена! Регистратор может оформлять eSIM.');
+                loadOrders(); // Обновляем список
+            } catch (err) {
+                alert('Ошибка: ' + err.message);
+            }
+        }
+        
+        // Отображение заказов
+        function renderOrders() {
+            const container = document.getElementById('ordersList');
+            let filteredOrders = allOrders;
+            
+            if (currentFilter === 'pending') {
+                filteredOrders = allOrders.filter(o => o.status === 'pending');
+            } else if (currentFilter === 'paid') {
+                filteredOrders = allOrders.filter(o => o.status === 'paid');
+            }
+            
+            if (filteredOrders.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div style="font-size: 48px; margin-bottom: 12px;">📭</div>
+                        <p>Нет заказов в этом разделе</p>
+                    </div>
+                `;
                 return;
             }
             
-            const container = document.getElementById('ordersList');
-            container.innerHTML = data.map(order => `
+            container.innerHTML = filteredOrders.map(order => `
                 <div class="order-card ${order.status}">
                     <div class="status-badge status-${order.status}">
-                        ${order.status === 'pending' ? '⏳ Ожидает оплаты' : order.status === 'paid' ? '✅ Оплачен' : '🎉 Завершен'}
+                        ${order.status === 'pending' ? '⏳ Ожидает оплаты' : 
+                          order.status === 'paid' ? '✅ Оплачен (ждет eSIM)' : 
+                          '🎉 Завершен'}
                     </div>
-                    <div class="order-number">${order.order_number}</div>
+                    <div class="order-number">📱 ${order.order_number}</div>
                     <div class="order-details">
-                        ${order.tariff_name} | ${order.email}<br>
-                        Создан: ${new Date(order.created_at).toLocaleString()}
+                        <strong>${order.tariff_name}</strong><br>
+                        ${order.tariff_gb} ГБ / ${order.tariff_minutes} мин<br>
+                        📧 ${order.email}
                     </div>
                     <div class="order-amount">${order.total_amount} ₽</div>
+                    <div class="time-info">🕐 Создан: ${formatDate(order.created_at)}</div>
                     ${order.status === 'pending' ? `
-                        <button class="btn" onclick="confirmPayment('${order.id}')">✅ Подтвердить оплату</button>
+                        <button class="btn" onclick="confirmPayment('${order.id}')" style="margin-top: 12px;">
+                            ✅ Подтвердить оплату
+                        </button>
                     ` : order.status === 'paid' ? `
-                        <span style="color:#4caf50;">✓ Оплата подтверждена, ожидает оформления eSIM</span>
-                    ` : `
-                        <span style="color:#2196f3;">✓ eSIM оформлен</span>
-                    `}
+                        <div style="margin-top: 12px; padding: 8px; background: #e8f5e9; border-radius: 12px; font-size: 0.8rem; color: #4caf50;">
+                            ✓ Оплата подтверждена, ожидает оформления eSIM
+                        </div>
+                    ` : ''}
                 </div>
             `).join('');
         }
-
-        async function confirmPayment(orderId) {
-            const { error } = await supabase
-                .from('orders')
-                .update({ status: 'paid' })
-                .eq('id', orderId);
-            
-            if (error) {
-                alert('Ошибка подтверждения');
-            } else {
-                alert('Оплата подтверждена! Регистратор может оформлять eSIM.');
-                loadOrders();
-            }
+        
+        function showError() {
+            const container = document.getElementById('ordersList');
+            container.innerHTML = `
+                <div class="empty-state">
+                    <div style="font-size: 48px; margin-bottom: 12px;">⚠️</div>
+                    <p>Ошибка подключения к базе данных</p>
+                    <p style="font-size: 0.8rem; margin-top: 8px;">Проверьте интернет и перезагрузите страницу</p>
+                    <button class="btn" onclick="location.reload()" style="margin-top: 16px;">Перезагрузить</button>
+                </div>
+            `;
         }
-
-        document.getElementById('refreshBtn').onclick = loadOrders;
+        
+        // Обработчики вкладок
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                currentFilter = tab.getAttribute('data-filter');
+                renderOrders();
+            });
+        });
+        
+        // Кнопка обновления
+        document.getElementById('refreshBtn').addEventListener('click', () => {
+            loadOrders();
+        });
+        
+        // Глобальная функция для кнопок
+        window.confirmPayment = confirmPayment;
+        
+        // Загрузка при старте
         loadOrders();
         
         // Автообновление каждые 5 секунд
         setInterval(loadOrders, 5000);
+        
+        // Уведомление о новых заказах (звук + вибрация)
+        let lastCount = 0;
+        setInterval(() => {
+            const pendingCount = allOrders.filter(o => o.status === 'pending').length;
+            if (pendingCount > lastCount && pendingCount > 0) {
+                // Вибрация если есть (мобильные устройства)
+                if (navigator.vibrate) navigator.vibrate(200);
+                // Меняем заголовок
+                document.title = `(${pendingCount}) Faith Service | Платежник`;
+                setTimeout(() => {
+                    document.title = 'Faith Service | Панель платежника';
+                }, 3000);
+            }
+            lastCount = pendingCount;
+        }, 3000);
     </script>
 </body>
 </html>
